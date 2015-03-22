@@ -1,0 +1,3 @@
+name = IP GateKeeper - block specific pages from unknown IP-addresses
+description = Assign certain pages to only be allowed to visit from specified IP-addresses.
+core = 7.x

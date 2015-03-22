@@ -1,0 +1,292 @@
+<?php
+
+/**
+ * Implements hook_menu().
+ */
+function ip_gatekeeper_menu() {
+  $items = array();
+  $items['admin/config/people/ip_gatekeeper-ip-ranges'] = array(
+    'title' => 'Restricted Pages (IP GateKeeper)',
+    'description' => 'Manage pages banned IP addresse ranges.',
+    'page callback' => 'ip_gatekeeper_testpage',
+    'access arguments' => array('ip_gatekeeper_configure_ips'),
+    'file' => 'ip_gatekeeper.admin.inc',
+    'weight' => 10,
+  );
+  $items['admin/config/people/ip_gatekeeper-ip-ranges/settings'] = array(
+    'title' => t('Settings for IP GateKeeper'),
+    'description' => t('Configure the behaviour of GateKeeper.'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('ip_gatekeeper_settings_form'),
+    'access arguments' => array('ip_gatekeeper_configure_ips'),
+    'file' => 'ip_gatekeeper.admin.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+  
+  $items['admin/config/people/ip_gatekeeper-ip-ranges/delete/%'] = array(
+    'title' => 'Delete IP range',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('ip_gatekeeper_delete', 5),
+    'access arguments' => array('ip_gatekeeper_configure_ips'),
+    'file' => 'ip_gatekeeper.admin.inc',
+  );
+  $items['ip_gatekeeper'] = array(
+    'title' => "ip_gatekeeper Test Page",
+    'page callback' => 'ip_gatekeeper_testpage',
+    'access arguments' => array('ip_gatekeeper_configure_ips'),
+    'file' => 'ip_gatekeeper.admin.inc',
+  );
+
+  return $items;
+}
+
+
+/**
+ * Implements hook_permission().
+ */
+function ip_gatekeeper_permission() {
+  return array(
+    'ip_gatekeeper_configure_ips' => array(
+      'title' => t('Administer Pages restricted to IP'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_boot().
+ *
+ * Checks users ip first against the whitelist, if not found then deny access.
+ *
+ * @see ip_gatekeeper_get_ip_list()
+ * @see ip_gatekeeper_check_ip()
+ * @see ip_gatekeeper_deny_access()
+ */
+function ip_gatekeeper_boot() {
+   $okaygo = variable_get('ip_gatekeeper_bootmode', 1);
+   
+   if ($okaygo != 1) {
+   	return;
+   }
+  
+  
+  $request_path = $_GET['q'];
+
+  // Determine if the $request_path is a restricted path.
+  $paths = array();
+  $paths = ip_gatekeeper_get_ip_paths($request_path);
+  
+  // If path is protected, continue on to see if request is coming from an accepted IP.
+  if (!empty($paths)) {
+    // Because this is a protected page, we ensure that this page is not cached.  
+    drupal_page_is_cacheable(FALSE);
+    
+    $whitelist = ip_gatekeeper_get_ip_list('whitelist', $request_path);
+    $current_ip = ip_address();
+    
+    $pass = false;
+    foreach ($whitelist as $ip) {
+      if (ip_gatekeeper_check_ip($ip->ip, $current_ip)) {
+        $pass = true;
+        break;
+      }
+    }
+    
+    // If not allowed to pass, show the access denied message.
+    if (!$pass) {
+      ip_gatekeeper_deny_access($current_ip, $request_path);
+      return;
+    }
+    else {
+      return;
+    }
+  }
+
+}
+
+
+/**
+ * Implements hook_init().
+ *
+ * Checks users ip first against the whitelist, if not found then deny access.
+ *
+ * @see ip_gatekeeper_get_ip_list()
+ * @see ip_gatekeeper_check_ip()
+ * @see ip_gatekeeper_deny_access()
+ */
+function ip_gatekeeper_init() {
+	$okaygo = variable_get('ip_gatekeeper_bootmode', 1);
+   
+   if ($okaygo == 1) {
+   	return;
+   }
+   
+   $request_path = $_GET['q'];
+
+  // Determine if the $request_path is a restricted path.
+  $paths = array();
+  $paths = ip_gatekeeper_get_ip_paths($request_path);
+  
+  // If path is protected, continue on to see if request is coming from an accepted IP.
+  if (!empty($paths)) {
+    // Because this is a protected page, we ensure that this page is not cached.  
+    drupal_page_is_cacheable(FALSE);
+    
+    $whitelist = ip_gatekeeper_get_ip_list('whitelist', $request_path);
+    $current_ip = ip_address();
+    
+    $pass = false;
+    foreach ($whitelist as $ip) {
+      if (ip_gatekeeper_check_ip($ip->ip, $current_ip)) {
+        $pass = true;
+        break;
+      }
+    }
+    
+    // If not allowed to pass, log request in watchdog and give standard Drupal access denied message.
+    if (!$pass) {
+      //
+     watchdog('ip_gatekeeper', 'Access attempted to %rp from IP: %ip', array('%rp' =>  $request_path, '%ip' => $current_ip), WATCHDOG_ALERT, $request_path);
+     drupal_access_denied();
+      return;
+    }
+    else {
+      return;
+    }
+  }
+}
+
+/**
+ *  React to a path being deleted and delete it from ip_gatekeeper table
+ * 
+ */ 
+function ip_gatekeeper_path_delete($path) {
+    watchdog('ip_gatekeeper', 'path_delete: <pre>' . print_r($path, TRUE) . '</pre>');
+    db_delete('ip_gatekeeper')
+                ->condition('source', $path['source'])
+                ->condition('path', $path['alias'])
+                ->execute();
+}
+
+
+/**
+ * Handles denied users.
+ *
+ * Prints a message and exits if access is denied.
+ */
+function ip_gatekeeper_deny_access($intruder_ip, $requested_path) {
+  // Log this access denied message in the watchdog
+  watchdog('ip_gatekeeper', 'Access attempted to %rp from IP: %ip', array('%rp' => $requested_path, '%ip' => $intruder_ip), WATCHDOG_ALERT, $requested_path);
+  header($_SERVER['SERVER_PROTOCOL'] . ' 403 Forbidden');
+
+  // Print the user customizable message.
+  print variable_get('ip_gatekeeper_bootmode_text', t("Sorry, something went wrong. That's all we know."));
+  exit();
+}
+
+/**
+ * Checks users ip first against the whitelist, then the blacklist if needed.
+ *
+ * @param $ip
+ *   Black- or whitelisted ip-address.
+ * @param $current_ip
+ *   Ip to be checked against the list, usually users current ip-address.
+ *
+ * @return
+ *   TRUE if the ip is on the list, FALSE if it is not.
+ *
+ * @see ip_gatekeeper_check_range()
+ */
+function ip_gatekeeper_check_ip($ip, $current_ip) {
+  $type = strpos($ip, '-') ? 'range' : 'single';
+  return ($type == 'single') ? $ip == $current_ip : ip_gatekeeper_check_range($ip, $current_ip);
+}
+
+/**
+ * Checks if the given ip-address matches the given range.
+ *
+ * @param $ip
+ *   Black- or whitelisted ip-address range.
+ * @param $current_ip
+ *   Ip to be checked against the list, usually users current ip-address.
+ *
+ * @return
+ *   TRUE if the ip is on the list, FALSE if it is not.
+ */
+function ip_gatekeeper_check_range($ip, $current_ip) {
+  $ip = explode('-', $ip);
+  list($lower, $upper) = $ip;
+  $lower_dec = (float) sprintf("%u", ip2long($lower));
+  $upper_dec = (float) sprintf("%u", ip2long($upper));
+  $ip_dec = (float) sprintf("%u", ip2long($current_ip));
+  return (($ip_dec >= $lower_dec) && ($ip_dec <= $upper_dec));
+}
+
+/**
+ * Creates/updates an entry to the ban database.
+ *
+ * @param $ip
+ *   IP-address or range to bw written to the database.
+ * @param $type
+ *   Type of the list(blacklist, whitelist).
+ * @param $bid
+ *   (optional) id of the current ban, used when existing record is updated.
+ */
+function ip_gatekeeper_write_record($ip, $type, $bid = NULL) {
+  db_merge('ip_gatekeeper')
+    ->key(array('bid' => $bid))
+    ->fields(array(
+      'bid' => $bid,
+      'ip' => $ip,
+      'type' => $type,
+    ))
+    ->execute();
+}
+
+/**
+ * Retrieves list of banned ip from the database.
+ *
+ * @param $type
+ *   (optional) Retrieve only the ip's of given list type(blacklist, whitelist).
+ *
+ * @return
+ *   An array of black-/whitelisted IP-addresses.
+ */
+
+function ip_gatekeeper_get_ip_list($type = '', $request_path = '') {
+  $query = db_select('ip_gatekeeper', 'list');
+  
+  if ($type) {
+    $query->condition('list.type', $type, '=');
+  }
+  
+  if ($request_path) {
+      $query->condition('list.path', $request_path, '=');
+  }
+  
+  if ($type || $request_path) {
+      $query->fields('list', array('ip'));
+  }
+  else {
+    $query->fields('list');
+  }
+  
+  return $query->execute()->fetchAll();
+}
+
+
+/**
+ * Retrieves list of restricted paths.
+ *
+ * @param $path2check
+ *
+ * @return
+ *   An array of restricted paths LIKE $path2check.
+ */
+
+function ip_gatekeeper_get_ip_paths( $path2check ) {
+  $query = db_select('ip_gatekeeper', 'list');
+  $query->condition('list.path', $path2check, 'LIKE')
+        ->fields('list', array('path', 'ip', 'type'));
+
+  return $query->execute()->fetchAll();
+}
