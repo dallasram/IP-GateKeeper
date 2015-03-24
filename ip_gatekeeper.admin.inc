@@ -200,7 +200,7 @@ function ip_gatekeeper_form_submit($form, &$form_state) {
         ->fields(array('source' => $saved_paths['system'], 'path' => $ip_path, 'ip' => $ip, 'type' => $type))
         ->execute();
     if ($ip_path == $saved_paths['system']) {
-      drupal_set_message(t('Source path of !source_path has been saved', array('!source_path' => $ip_path));
+      drupal_set_message(t('Source path of !source_path has been saved', array('!source_path' => $ip_path)));
     }
     else {
       drupal_set_message(t('Alias of !source_path has been found and saved (!alias)',
