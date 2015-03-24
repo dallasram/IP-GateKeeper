@@ -9,6 +9,7 @@
  * Menu callback. Displays banned IP ranges.
  */
 function ip_gatekeeper_testpage() {
+  drupal_set_message('<a href="/admin/config/people/ip_gatekeeper-ip-ranges/settings">Click here for ip_gatekeeper settings.</a>');
   drupal_set_message('<strong>Note that your own IP-Address is currently <i>'.ip_address().'</i>. Be carefull not to lock yourself out!<br /></strong>');
   
   // Check to see if any existing restricted aliases no longer exist
