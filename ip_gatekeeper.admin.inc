@@ -8,8 +8,8 @@
 /**
  * Menu callback. Displays banned IP ranges.
  */
-function ip_gatekeeper_testpage() {
-  drupal_set_message('<a href="/admin/config/people/ip_gatekeeper-ip-ranges/settings">Click here for ip_gatekeeper settings.</a>');
+function ip_gatekeeper_admin_page() {
+  drupal_set_message('<a href="/admin/config/people/ip_gatekeeper/settings">Click here for ip_gatekeeper settings.</a>');
   drupal_set_message('<strong>Note that your own IP-Address is currently <i>'.ip_address().'</i>. Be carefull not to lock yourself out!<br /></strong>');
 
   // Check to see if any existing restricted aliases no longer exist
@@ -18,22 +18,21 @@ function ip_gatekeeper_testpage() {
   // Perform a basic check to determine if restricted paths are still valid
   // @TODO: Check/Test this logic.
   foreach($ips as $record) {
-      // Determine if the entered path is a path Drupal recognizes
-      if (!drupal_valid_path($record->path)) {
-        // Not a system URL.
-        if (!drupal_lookup_path('source', $record->path)) {
-          // Not a path alias.
-          // $path does not exits
-          drupal_set_message($record->path . " may not be a valid path, please check!");
-        }
-        else if (!drupal_lookup_path('source', $record->source) && !drupal_valid_path($record->source)) {
-            drupal_set_message($record->path . " Possibly an abandonded alias!");
-        }
+    // Determine if the entered path is a path Drupal recognizes
+    if (!drupal_valid_path($record->path)) {
+      // Not a system URL.
+      if (!drupal_lookup_path('source', $record->path)) {
+        // Not a path alias.
+        // $path does not exits
+        drupal_set_message($record->path . " may not be a valid path, please check!");
       }
+      else if (!drupal_lookup_path('source', $record->source) && !drupal_valid_path($record->source)) {
+        drupal_set_message($record->path . " Possibly an abandonded alias!");
+      }
+    }
   }
 
   $build = array();
-
   $build['ip_gatekeeper_form'] = drupal_get_form('ip_gatekeeper_whitelist_page_form');
 
   $rows = array();
@@ -44,7 +43,7 @@ function ip_gatekeeper_testpage() {
       $ip->path,
       $ip->source,
       str_replace('-', ' - ',$ip->ip),
-      l(t('delete'), "admin/config/people/ip_gatekeeper-ip-ranges/delete/$ip->bid/$ip->ip"),
+      l(t('delete'), "admin/config/people/ip_gatekeeper/delete/$ip->bid/$ip->ip"),
     );
   }
 
@@ -61,19 +60,19 @@ function ip_gatekeeper_testpage() {
  * Menu callback. Displays the IP Gatekeeper Settings Page.
  */
 function ip_gatekeeper_settings_form() {
-	$form = array();
+  $form = array();
 
-	$options = array(0 => t('Standard Drupal Access Denied Page'), 1 => t('Boot Mode: Resource Friendly, only the customizable error message below will be shown.'));
+  $options = array(0 => t('Standard Drupal Access Denied Page'), 1 => t('Boot Mode: Resource Friendly, only the customizable error message below will be shown.'));
 
-    $form['ip_gatekeeper_bootmode'] = array(
-     '#type' => 'radios',
-     '#title' => t('Boot Mode'),
-     '#default_value' => variable_get('ip_gatekeeper_bootmode', 0),
-     '#options' => $options,
-     '#description' => t('To save server resources, it is recommended to use Boot Mode.'),
-   );
+  $form['ip_gatekeeper_bootmode'] = array(
+    '#type' => 'radios',
+    '#title' => t('Boot Mode'),
+    '#default_value' => variable_get('ip_gatekeeper_bootmode', 0),
+    '#options' => $options,
+    '#description' => t('To save server resources, it is recommended to use Boot Mode.'),
+  );
 
-   $form['ip_gatekeeper_bootmode_text'] = array(
+  $form['ip_gatekeeper_bootmode_text'] = array(
     '#title' => t('Boot Mode: Enter the text you wish to appear on unauthorized pages.'),
     '#type' => 'textfield',
     '#size' => 48,
@@ -83,7 +82,7 @@ function ip_gatekeeper_settings_form() {
     '#description' => t('This text only applies when Boot Mode is enabled.'),
   );
 
-   return system_settings_form($form);
+  return system_settings_form($form);
 }
 
 /**
@@ -126,8 +125,8 @@ function ip_gatekeeper_whitelist_page_form($form, $form_state) {
     '#type' => 'submit',
     '#value' => t('Add'),
   );
-  $form['#validate'][] = 'ip_gatekeeper_form_validate';
-  $form['#submit'][] = 'ip_gatekeeper_form_submit';
+  $form['#validate'][] = 'ip_gatekeeper_page_form_validate';
+  $form['#submit'][] = 'ip_gatekeeper_page_form_submit';
 
   return $form;
 }
@@ -135,16 +134,15 @@ function ip_gatekeeper_whitelist_page_form($form, $form_state) {
 /**
  * Form validation handler for ip_gatekeeper_form().
  */
-function ip_gatekeeper_form_validate($form, &$form_state) {
+function ip_gatekeeper_page_form_validate($form, &$form_state) {
   // Determine if the entered path is a path Drupal recognizes
   if (!drupal_valid_path(trim($form_state['values']['ip_path']))) {
-      // Not a system URL.
-      if (!drupal_lookup_path('source', trim($form_state['values']['ip_path']))) {
-        // Not a path alias.
-        // $path does not exits
-        form_set_error('ip_path', t("The path you have entered is not recognized."));
-      }
+    // Not a system URL.
+    if (!drupal_lookup_path('source', trim($form_state['values']['ip_path']))) {
+      // Not a path alias, since $path does not exits
+      form_set_error('ip_path', t("The path you have entered is not recognized."));
     }
+  }
   $ip_start = trim($form_state['values']['ip_start']);
   $ip_end = isset($form_state['values']['ip_end']) ? trim($form_state['values']['ip_end']) : FALSE;
   if (filter_var($ip_start, FILTER_VALIDATE_IP, FILTER_FLAG_NO_RES_RANGE) == FALSE) {
@@ -155,13 +153,13 @@ function ip_gatekeeper_form_validate($form, &$form_state) {
   }
   elseif ($ip_start == ip_address() || ($ip_end && ip_gatekeeper_check_range($ip_start . '-' . $ip_end, ip_address()))) {
   // This fires if users own IP is in the selected range. Currently we wont do anything in that case.
- }
+  }
 }
 
 /**
  * Form submission handler for ip_gatekeeper_form().
  */
-function ip_gatekeeper_form_submit($form, &$form_state) {
+function ip_gatekeeper_page_form_submit($form, &$form_state) {
   $ip_path = trim($form_state['values']['ip_path']);
   $ip_start = trim($form_state['values']['ip_start']);
   $ip_start = preg_replace('/\s+/', '', $ip_start);
@@ -212,7 +210,7 @@ function ip_gatekeeper_form_submit($form, &$form_state) {
     }
   }
 
-  $form_state['redirect'] = 'admin/config/people/ip_gatekeeper-ip-ranges';
+  $form_state['redirect'] = 'admin/config/people/ip_gatekeeper';
   return;
 }
 
@@ -227,7 +225,7 @@ function ip_gatekeeper_delete($form, &$form_state, $bid, $ip) {
     '#value' => $bid,
   );
 
-  return confirm_form($form, t('Are you sure you want allow _rpath_ to be accessible by ip/range %ip?', array( '%ip' => str_replace('-',' - ',$ip))), 'admin/config/people/ip_gatekeeper-ip-ranges', t('This action cannot be undone.'), t('Delete'), t('Cancel'));
+  return confirm_form($form, t('Are you sure you want allow _rpath_ to be accessible by ip/range %ip?', array( '%ip' => str_replace('-',' - ',$ip))), 'admin/config/people/ip_gatekeeper', t('This action cannot be undone.'), t('Delete'), t('Cancel'));
 }
 
 /**
@@ -241,5 +239,5 @@ function ip_gatekeeper_delete_submit($form, &$form_state) {
     ->execute();
   watchdog('user', 'Deleted %ip from banned ip-ranges', array('%ip' => $ip));
   drupal_set_message(t('The IP address/range %ip was deleted.', array('%ip' => str_replace('-',' - ',$ip))));
-  $form_state['redirect'] = 'admin/config/people/ip_gatekeeper-ip-ranges';
+  $form_state['redirect'] = 'admin/config/people/ip_gatekeeper';
 }
