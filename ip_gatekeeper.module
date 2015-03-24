@@ -62,7 +62,7 @@ function ip_gatekeeper_permission() {
  * @see ip_gatekeeper_deny_access()
  */
 function ip_gatekeeper_boot() {
-   $okaygo = variable_get('ip_gatekeeper_bootmode', 1);
+   $okaygo = variable_get('ip_gatekeeper_bootmode', 0);
    
    if ($okaygo != 1) {
    	return;
@@ -114,7 +114,7 @@ function ip_gatekeeper_boot() {
  * @see ip_gatekeeper_deny_access()
  */
 function ip_gatekeeper_init() {
-	$okaygo = variable_get('ip_gatekeeper_bootmode', 1);
+	$okaygo = variable_get('ip_gatekeeper_bootmode', 0);
    
    if ($okaygo == 1) {
    	return;
@@ -232,8 +232,7 @@ function ip_gatekeeper_check_range($ip, $current_ip) {
  *   (optional) id of the current ban, used when existing record is updated.
  */
 function ip_gatekeeper_write_record($ip, $type, $bid = NULL) {
-  db_merge('ip_gatekeeper')
-    ->key(array('bid' => $bid))
+  db_insert('ip_gatekeeper')
     ->fields(array(
       'bid' => $bid,
       'ip' => $ip,

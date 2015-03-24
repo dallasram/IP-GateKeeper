@@ -63,12 +63,12 @@ function ip_gatekeeper_testpage() {
 function ip_gatekeeper_settings_form() {
 	$form = array();
 	
-	$options = array(0 => t('Full Mode: Standard Drupal Access Denied Page'), 1 => t('Boot Mode: Resource Friendly, only the customizable error message below will be shown.'));
+	$options = array(0 => t('Standard Drupal Access Denied Page'), 1 => t('Boot Mode: Resource Friendly, only the customizable error message below will be shown.'));
 
     $form['ip_gatekeeper_bootmode'] = array(
      '#type' => 'radios',
      '#title' => t('Boot Mode'),
-     '#default_value' => variable_get('ip_gatekeeper_bootmode', 1),
+     '#default_value' => variable_get('ip_gatekeeper_bootmode', 0),
      '#options' => $options,
      '#description' => t('To save server resources, it is recommended to use Boot Mode.'),
    );
