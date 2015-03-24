@@ -11,17 +11,16 @@
 function ip_gatekeeper_testpage() {
   drupal_set_message('<a href="/admin/config/people/ip_gatekeeper-ip-ranges/settings">Click here for ip_gatekeeper settings.</a>');
   drupal_set_message('<strong>Note that your own IP-Address is currently <i>'.ip_address().'</i>. Be carefull not to lock yourself out!<br /></strong>');
-  
+
   // Check to see if any existing restricted aliases no longer exist
   $ips = ip_gatekeeper_get_ip_list();
-  
+
   // Perform a basic check to determine if restricted paths are still valid
   // @TODO: Check/Test this logic.
   foreach($ips as $record) {
       // Determine if the entered path is a path Drupal recognizes
       if (!drupal_valid_path($record->path)) {
         // Not a system URL.
-        //dpm("lookup_path('source': " . drupal_lookup_path('source', $record->path));
         if (!drupal_lookup_path('source', $record->path)) {
           // Not a path alias.
           // $path does not exits
@@ -32,11 +31,11 @@ function ip_gatekeeper_testpage() {
         }
       }
   }
-  
+
   $build = array();
-  
+
   $build['ip_gatekeeper_form'] = drupal_get_form('ip_gatekeeper_whitelist_page_form');
-  
+
   $rows = array();
   $header = array(t('Path'), t('Source'), t('Allowed IP'), t('Operations'));
   $ip_list = ip_gatekeeper_get_ip_list();
@@ -54,7 +53,7 @@ function ip_gatekeeper_testpage() {
     '#header' => $header,
     '#rows' => $rows,
   );
-  
+
   return $build;
 }
 
@@ -63,7 +62,7 @@ function ip_gatekeeper_testpage() {
  */
 function ip_gatekeeper_settings_form() {
 	$form = array();
-	
+
 	$options = array(0 => t('Standard Drupal Access Denied Page'), 1 => t('Boot Mode: Resource Friendly, only the customizable error message below will be shown.'));
 
     $form['ip_gatekeeper_bootmode'] = array(
@@ -73,7 +72,7 @@ function ip_gatekeeper_settings_form() {
      '#options' => $options,
      '#description' => t('To save server resources, it is recommended to use Boot Mode.'),
    );
-   
+
    $form['ip_gatekeeper_bootmode_text'] = array(
     '#title' => t('Boot Mode: Enter the text you wish to appear on unauthorized pages.'),
     '#type' => 'textfield',
@@ -83,7 +82,7 @@ function ip_gatekeeper_settings_form() {
     '#default_value' => variable_get('ip_gatekeeper_bootmode_text', t("Sorry, something went wrong.  That's all we know.")),
     '#description' => t('This text only applies when Boot Mode is enabled.'),
   );
-   
+
    return system_settings_form($form);
 }
 
@@ -116,12 +115,12 @@ function ip_gatekeeper_whitelist_page_form($form, $form_state) {
     '#maxlength' => 15,
     '#description' => t('If entered, the banned ip will be treated as a range.'),
   );
-  
+
   $form['type'] = array(
     '#type' => 'hidden',
     '#value' => 'whitelist',
   );
-  
+
   $form['actions'] = array('#type' => 'actions');
   $form['actions']['submit'] = array(
     '#type' => 'submit',
@@ -129,7 +128,7 @@ function ip_gatekeeper_whitelist_page_form($form, $form_state) {
   );
   $form['#validate'][] = 'ip_gatekeeper_form_validate';
   $form['#submit'][] = 'ip_gatekeeper_form_submit';
-  
+
   return $form;
 }
 
@@ -175,38 +174,44 @@ function ip_gatekeeper_form_submit($form, &$form_state) {
   }
 
   $type = $form_state['values']['type'];
-  
+
   // Determine all the paths that can be associated with the entered path (i.e. system path and all aliased paths)
   $saved_paths = array();
 
   // Get the system path
   $saved_paths['system'] = drupal_get_normal_path($ip_path);
   //dpm('Normal path: ' . drupal_get_normal_path($ip_path) );
-  
+
   // Now save each alias to this system path
   $aliases = db_query('
               SELECT alias
               FROM {url_alias}
-              WHERE source = :source
-            ', array(':source' => $saved_paths['system']))->fetchAll();
-  //dpm($aliases, "all aliases");
+              WHERE source = :source',
+              array(':source' => $saved_paths['system']))->fetchAll();
   if (isset($aliases) && !empty($aliases)) {
       foreach($aliases as $index => $alias) {
           $saved_paths['alias'.$index] = $alias->alias;
       }
   }
-  
-  // Save each known path alias  
+
+  // Save each known path alias
   foreach($saved_paths as $ip_path) {
-    db_merge('ip_gatekeeper')
-        ->key(array('bid' => NULL))
+    db_insert('ip_gatekeeper')
         ->fields(array('source' => $saved_paths['system'], 'path' => $ip_path, 'ip' => $ip, 'type' => $type))
         ->execute();
-    drupal_set_message($ip_path . " has been saved");
+    if ($ip_path == $saved_paths['system']) {
+      drupal_set_message(t('Source path of !source_path has been saved', array('!source_path' => $ip_path));
+    }
+    else {
+      drupal_set_message(t('Alias of !source_path has been found and saved (!alias)',
+                            array(
+                                  '!source_path' => $saved_paths['system'],
+                                  '!alias' => $ip_path
+                                  )
+                          );
+    }
   }
 
-  $list = ($type == 'blacklist') ? 'blacklisted' : 'whitelisted';
-  drupal_set_message(t('The IP address %ip has been %list.', array('%ip' => $ip, '%list' => $list)));
   $form_state['redirect'] = 'admin/config/people/ip_gatekeeper-ip-ranges';
   return;
 }
@@ -221,7 +226,7 @@ function ip_gatekeeper_delete($form, &$form_state, $bid, $ip) {
     '#type' => 'value',
     '#value' => $bid,
   );
-  
+
   return confirm_form($form, t('Are you sure you want allow _rpath_ to be accessible by ip/range %ip?', array( '%ip' => str_replace('-',' - ',$ip))), 'admin/config/people/ip_gatekeeper-ip-ranges', t('This action cannot be undone.'), t('Delete'), t('Cancel'));
 }
 
