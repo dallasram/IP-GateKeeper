@@ -40,7 +40,7 @@ function ip_gatekeeper_admin_page() {
   $ip_list = ip_gatekeeper_get_ip_list();
   foreach ($ip_list as $ip) {
     $rows[] = array(
-      $ip->path,
+      l($ip->path, $ip->path),
       $ip->source,
       str_replace('-', ' - ',$ip->ip),
       l(t('delete'), "admin/config/people/ip_gatekeeper/delete/$ip->bid/$ip->ip"),
