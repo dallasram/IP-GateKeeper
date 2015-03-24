@@ -208,7 +208,7 @@ function ip_gatekeeper_form_submit($form, &$form_state) {
                                   '!source_path' => $saved_paths['system'],
                                   '!alias' => $ip_path
                                   )
-                          );
+                          ));
     }
   }
 
